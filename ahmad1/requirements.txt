@@ -1,3 +1,2 @@
-git add requirements.txt
-git commit -m "Fix Werkzeug version to 2.2.3 for Flask compatibility"
-git push origin main
+Flask==2.2.3
+Werkzeug==2.2.3
