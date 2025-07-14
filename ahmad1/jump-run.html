@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة القفز والجري</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(to bottom, #87CEEB, #98FB98);
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            direction: rtl;
+        }
+        
+        .game-container {
+            text-align: center;
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        
+        #gameCanvas {
+            border: 3px solid #333;
+            border-radius: 10px;
+            background: linear-gradient(to bottom, #87CEEB, #90EE90);
+        }
+        
+        .controls {
+            margin: 15px 0;
+        }
+        
+        .btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            margin: 5px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .btn:hover {
+            background: #45a049;
+        }
+        
+        .btn.earn-points {
+            background: #FF6B35;
+        }
+        
+        .btn.earn-points:hover {
+            background: #E55A2B;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin: 15px 0;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .stat {
+            background: #f0f0f0;
+            padding: 10px 15px;
+            border-radius: 8px;
+        }
+        
+        .instructions {
+            margin: 15px 0;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>🏃‍♂️ لعبة القفز والجري</h1>
+        
+        <div class="stats">
+            <div class="stat">النقاط: <span id="score">0</span></div>
+            <div class="stat">المسافة: <span id="distance">0</span>م</div>
+            <div class="stat">الحياة: <span id="lives">3</span></div>
+        </div>
+        
+        <canvas id="gameCanvas" width="500" height="400"></canvas>
+        
+        <div class="controls">
+            <button class="btn" onclick="startGame()">ابدأ اللعبة</button>
+            <button class="btn" onclick="pauseGame()">إيقاف مؤقت</button>
+            <button class="btn earn-points" onclick="earnPoints()">شاهد إعلان لكسب نقاط</button>
+        </div>
+        
+        <div class="instructions">
+            اضغط مسافة أو انقر للقفز<br>
+            تجنب العوائق واجمع العملات الذهبية!
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let gameRunning = false;
+        let score = 0;
+        let distance = 0;
+        let lives = 3;
+        let gameSpeed = 3;
+        let sessionStartTime = Date.now();
+        
+        // Player character
+        const player = {
+            x: 50,
+            y: canvas.height - 100,
+            width: 40,
+            height: 60,
+            velocityY: 0,
+            jumping: false,
+            grounded: true,
+            color: '#FF4444'
+        };
+        
+        // Game objects
+        let obstacles = [];
+        let coins = [];
+        let clouds = [];
+        
+        // Physics
+        const gravity = 0.8;
+        const jumpPower = -15;
+        const groundY = canvas.height - 40;
+        
+        function gameLoop() {
+            if (!gameRunning) return;
+            
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function update() {
+            // Update player physics
+            if (player.jumping) {
+                player.velocityY += gravity;
+                player.y += player.velocityY;
+                
+                if (player.y >= groundY - player.height) {
+                    player.y = groundY - player.height;
+                    player.jumping = false;
+                    player.grounded = true;
+                    player.velocityY = 0;
+                }
+            }
+            
+            // Update distance and score
+            distance += gameSpeed;
+            if (distance % 100 === 0) {
+                score += 10;
+            }
+            
+            // Move obstacles
+            obstacles.forEach((obstacle, index) => {
+                obstacle.x -= gameSpeed;
+                if (obstacle.x + obstacle.width < 0) {
+                    obstacles.splice(index, 1);
+                    score += 20;
+                }
+            });
+            
+            // Move coins
+            coins.forEach((coin, index) => {
+                coin.x -= gameSpeed;
+                if (coin.x + coin.width < 0) {
+                    coins.splice(index, 1);
+                }
+            });
+            
+            // Move clouds
+            clouds.forEach(cloud => {
+                cloud.x -= gameSpeed * 0.3;
+                if (cloud.x + cloud.width < 0) {
+                    cloud.x = canvas.width;
+                }
+            });
+            
+            // Spawn obstacles
+            if (Math.random() < 0.005) {
+                obstacles.push({
+                    x: canvas.width,
+                    y: groundY - 40,
+                    width: 30,
+                    height: 40,
+                    color: '#8B4513'
+                });
+            }
+            
+            // Spawn coins
+            if (Math.random() < 0.008) {
+                coins.push({
+                    x: canvas.width,
+                    y: groundY - Math.random() * 100 - 30,
+                    width: 20,
+                    height: 20
+                });
+            }
+            
+            // Check collisions
+            checkCollisions();
+            
+            // Increase speed over time
+            gameSpeed = 3 + Math.floor(distance / 1000) * 0.5;
+            
+            updateStats();
+        }
+        
+        function draw() {
+            // Clear canvas with gradient background
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#87CEEB');
+            gradient.addColorStop(1, '#90EE90');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw clouds
+            clouds.forEach(cloud => {
+                ctx.fillStyle = '#FFF';
+                ctx.beginPath();
+                ctx.arc(cloud.x, cloud.y, 20, 0, Math.PI * 2);
+                ctx.arc(cloud.x + 25, cloud.y, 25, 0, Math.PI * 2);
+                ctx.arc(cloud.x + 50, cloud.y, 20, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            
+            // Draw ground
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+            
+            // Draw grass
+            ctx.fillStyle = '#228B22';
+            ctx.fillRect(0, groundY - 5, canvas.width, 5);
+            
+            // Draw player
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            
+            // Draw player face
+            ctx.fillStyle = '#FFF';
+            ctx.fillRect(player.x + 5, player.y + 5, 8, 8);
+            ctx.fillRect(player.x + 27, player.y + 5, 8, 8);
+            ctx.fillStyle = '#000';
+            ctx.fillRect(player.x + 7, player.y + 7, 4, 4);
+            ctx.fillRect(player.x + 29, player.y + 7, 4, 4);
+            
+            // Draw obstacles
+            obstacles.forEach(obstacle => {
+                ctx.fillStyle = obstacle.color;
+                ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+            });
+            
+            // Draw coins
+            coins.forEach(coin => {
+                ctx.fillStyle = '#FFD700';
+                ctx.beginPath();
+                ctx.arc(coin.x + 10, coin.y + 10, 10, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Coin shine effect
+                ctx.fillStyle = '#FFF';
+                ctx.beginPath();
+                ctx.arc(coin.x + 7, coin.y + 7, 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+        
+        function checkCollisions() {
+            // Check obstacle collisions
+            obstacles.forEach(obstacle => {
+                if (player.x < obstacle.x + obstacle.width &&
+                    player.x + player.width > obstacle.x &&
+                    player.y < obstacle.y + obstacle.height &&
+                    player.y + player.height > obstacle.y) {
+                    hitObstacle();
+                }
+            });
+            
+            // Check coin collisions
+            coins.forEach((coin, index) => {
+                if (player.x < coin.x + coin.width &&
+                    player.x + player.width > coin.x &&
+                    player.y < coin.y + coin.height &&
+                    player.y + player.height > coin.y) {
+                    coins.splice(index, 1);
+                    score += 100;
+                }
+            });
+        }
+        
+        function hitObstacle() {
+            lives--;
+            if (lives <= 0) {
+                gameOver();
+            } else {
+                // Brief invincibility
+                player.color = '#FFA500';
+                setTimeout(() => {
+                    player.color = '#FF4444';
+                }, 1000);
+            }
+        }
+        
+        function jump() {
+            if (player.grounded && !player.jumping) {
+                player.jumping = true;
+                player.grounded = false;
+                player.velocityY = jumpPower;
+            }
+        }
+        
+        function startGame() {
+            gameRunning = true;
+            score = 0;
+            distance = 0;
+            lives = 3;
+            gameSpeed = 3;
+            obstacles = [];
+            coins = [];
+            
+            // Initialize clouds
+            clouds = [];
+            for (let i = 0; i < 3; i++) {
+                clouds.push({
+                    x: Math.random() * canvas.width,
+                    y: 50 + Math.random() * 100,
+                    width: 70
+                });
+            }
+            
+            player.y = groundY - player.height;
+            player.jumping = false;
+            player.grounded = true;
+            player.velocityY = 0;
+            player.color = '#FF4444';
+            
+            sessionStartTime = Date.now();
+            updateStats();
+            gameLoop();
+            
+            // Award points for first play of the day
+            if (!localStorage.getItem('jumpPlayedToday')) {
+                localStorage.setItem('jumpPlayedToday', new Date().toDateString());
+                alert('تهانينا! حصلت على نقطة واحدة لأول لعبة اليوم!');
+            }
+        }
+        
+        function pauseGame() {
+            gameRunning = !gameRunning;
+            if (gameRunning) {
+                gameLoop();
+            }
+        }
+        
+        function gameOver() {
+            gameRunning = false;
+            const playTime = (Date.now() - sessionStartTime) / 1000;
+            
+            let message = `انتهت اللعبة!\nالنقاط النهائية: ${score}\nالمسافة: ${Math.floor(distance)}م`;
+            
+            // Check if played for 3 minutes
+            if (playTime >= 180) {
+                message += '\n\nرائع! لعبت لأكثر من 3 دقائق. حصلت على نقطتين إضافيتين!';
+            }
+            
+            alert(message);
+        }
+        
+        function earnPoints() {
+            // Simulate ad watching
+            if (confirm('هل تريد مشاهدة إعلان لكسب 5 نقاط؟')) {
+                // In real implementation, this would trigger an actual ad
+                setTimeout(() => {
+                    alert('تهانينا! حصلت على 5 نقاط من مشاهدة الإعلان!');
+                    // Here you would send the points to the backend
+                }, 2000);
+            }
+        }
+        
+        function updateStats() {
+            document.getElementById('score').textContent = score;
+            document.getElementById('distance').textContent = Math.floor(distance);
+            document.getElementById('lives').textContent = lives;
+        }
+        
+        // Controls
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && gameRunning) {
+                e.preventDefault();
+                jump();
+            }
+        });
+        
+        // Touch controls
+        canvas.addEventListener('click', () => {
+            if (gameRunning) {
+                jump();
+            }
+        });
+        
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (gameRunning) {
+                jump();
+            }
+        });
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة تركيب الصور</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%);
+            font-family: Arial, sans-serif;
+            direction: rtl;
+            min-height: 100vh;
+        }
+        
+        .game-container {
+            max-width: 700px;
+            margin: 0 auto;
+            text-align: center;
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        
+        .puzzle-board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+            max-width: 400px;
+            margin: 20px auto;
+            border: 3px solid #333;
+            border-radius: 10px;
+            padding: 10px;
+            background: #f0f0f0;
+        }
+        
+        .puzzle-piece {
+            aspect-ratio: 1;
+            border: 2px solid #666;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            font-weight: bold;
+            background: #fff;
+            transition: all 0.3s ease;
+            user-select: none;
+        }
+        
+        .puzzle-piece:hover {
+            transform: scale(1.05);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        
+        .puzzle-piece.empty {
+            background: #ddd;
+            border-style: dashed;
+        }
+        
+        .puzzle-piece.correct {
+            background: #90EE90;
+            border-color: #4CAF50;
+        }
+        
+        .controls {
+            margin: 20px 0;
+        }
+        
+        .btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            margin: 5px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .btn:hover {
+            background: #45a049;
+        }
+        
+        .btn.earn-points {
+            background: #FF6B35;
+        }
+        
+        .btn.earn-points:hover {
+            background: #E55A2B;
+        }
+        
+        .btn.difficulty {
+            background: #2196F3;
+        }
+        
+        .btn.difficulty:hover {
+            background: #1976D2;
+        }
+        
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .stat {
+            background: #f0f0f0;
+            padding: 10px 20px;
+            border-radius: 8px;
+        }
+        
+        .instructions {
+            margin: 15px 0;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .difficulty-selector {
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>🧩 لعبة تركيب الصور</h1>
+        
+        <div class="stats">
+            <div class="stat">الحركات: <span id="moves">0</span></div>
+            <div class="stat">الوقت: <span id="timer">00:00</span></div>
+            <div class="stat">النقاط: <span id="score">0</span></div>
+        </div>
+        
+        <div class="difficulty-selector">
+            <button class="btn difficulty" onclick="setDifficulty(3)">سهل (3×3)</button>
+            <button class="btn difficulty" onclick="setDifficulty(4)">متوسط (4×4)</button>
+            <button class="btn difficulty" onclick="setDifficulty(5)">صعب (5×5)</button>
+        </div>
+        
+        <div class="puzzle-board" id="puzzleBoard"></div>
+        
+        <div class="controls">
+            <button class="btn" onclick="startNewGame()">لعبة جديدة</button>
+            <button class="btn" onclick="shufflePuzzle()">خلط القطع</button>
+            <button class="btn earn-points" onclick="earnPoints()">شاهد إعلان لكسب نقاط</button>
+        </div>
+        
+        <div class="instructions">
+            انقر على القطع المجاورة للمساحة الفارغة لتحريكها<br>
+            رتب الأرقام من 1 إلى النهاية مع ترك المساحة الأخيرة فارغة
+        </div>
+    </div>
+
+    <script>
+        let boardSize = 3;
+        let board = [];
+        let emptyPos = { row: boardSize - 1, col: boardSize - 1 };
+        let moves = 0;
+        let score = 0;
+        let gameStartTime = 0;
+        let timerInterval;
+        let sessionStartTime = Date.now();
+        
+        function initGame() {
+            const puzzleBoard = document.getElementById('puzzleBoard');
+            puzzleBoard.style.gridTemplateColumns = `repeat(${boardSize}, 1fr)`;
+            puzzleBoard.innerHTML = '';
+            
+            // Initialize board with numbers
+            board = [];
+            for (let i = 0; i < boardSize; i++) {
+                board[i] = [];
+                for (let j = 0; j < boardSize; j++) {
+                    if (i === boardSize - 1 && j === boardSize - 1) {
+                        board[i][j] = 0; // Empty space
+                    } else {
+                        board[i][j] = i * boardSize + j + 1;
+                    }
+                }
+            }
+            
+            emptyPos = { row: boardSize - 1, col: boardSize - 1 };
+            moves = 0;
+            score = 0;
+            updateStats();
+            renderBoard();
+        }
+        
+        function renderBoard() {
+            const puzzleBoard = document.getElementById('puzzleBoard');
+            puzzleBoard.innerHTML = '';
+            
+            for (let i = 0; i < boardSize; i++) {
+                for (let j = 0; j < boardSize; j++) {
+                    const piece = document.createElement('div');
+                    piece.className = 'puzzle-piece';
+                    piece.dataset.row = i;
+                    piece.dataset.col = j;
+                    
+                    if (board[i][j] === 0) {
+                        piece.classList.add('empty');
+                        piece.textContent = '';
+                    } else {
+                        piece.textContent = board[i][j];
+                        
+                        // Check if piece is in correct position
+                        const correctValue = i * boardSize + j + 1;
+                        if (board[i][j] === correctValue) {
+                            piece.classList.add('correct');
+                        }
+                    }
+                    
+                    piece.addEventListener('click', () => movePiece(i, j));
+                    puzzleBoard.appendChild(piece);
+                }
+            }
+        }
+        
+        function movePiece(row, col) {
+            // Check if the piece is adjacent to empty space
+            const rowDiff = Math.abs(row - emptyPos.row);
+            const colDiff = Math.abs(col - emptyPos.col);
+            
+            if ((rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1)) {
+                // Swap piece with empty space
+                board[emptyPos.row][emptyPos.col] = board[row][col];
+                board[row][col] = 0;
+                emptyPos = { row, col };
+                
+                moves++;
+                updateStats();
+                renderBoard();
+                
+                if (isPuzzleSolved()) {
+                    gameComplete();
+                }
+            }
+        }
+        
+        function isPuzzleSolved() {
+            for (let i = 0; i < boardSize; i++) {
+                for (let j = 0; j < boardSize; j++) {
+                    if (i === boardSize - 1 && j === boardSize - 1) {
+                        if (board[i][j] !== 0) return false;
+                    } else {
+                        const correctValue = i * boardSize + j + 1;
+                        if (board[i][j] !== correctValue) return false;
+                    }
+                }
+            }
+            return true;
+        }
+        
+        function shufflePuzzle() {
+            // Perform random valid moves to shuffle
+            for (let i = 0; i < 1000; i++) {
+                const possibleMoves = [];
+                
+                // Find adjacent pieces to empty space
+                if (emptyPos.row > 0) possibleMoves.push({ row: emptyPos.row - 1, col: emptyPos.col });
+                if (emptyPos.row < boardSize - 1) possibleMoves.push({ row: emptyPos.row + 1, col: emptyPos.col });
+                if (emptyPos.col > 0) possibleMoves.push({ row: emptyPos.row, col: emptyPos.col - 1 });
+                if (emptyPos.col < boardSize - 1) possibleMoves.push({ row: emptyPos.row, col: emptyPos.col + 1 });
+                
+                // Make random move
+                const randomMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+                board[emptyPos.row][emptyPos.col] = board[randomMove.row][randomMove.col];
+                board[randomMove.row][randomMove.col] = 0;
+                emptyPos = randomMove;
+            }
+            
+            moves = 0;
+            updateStats();
+            renderBoard();
+        }
+        
+        function setDifficulty(size) {
+            boardSize = size;
+            initGame();
+        }
+        
+        function startNewGame() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+            }
+            
+            initGame();
+            shufflePuzzle();
+            
+            gameStartTime = Date.now();
+            sessionStartTime = Date.now();
+            timerInterval = setInterval(updateTimer, 1000);
+            
+            // Award points for first play of the day
+            if (!localStorage.getItem('puzzlePlayedToday')) {
+                localStorage.setItem('puzzlePlayedToday', new Date().toDateString());
+                alert('تهانينا! حصلت على نقطة واحدة لأول لعبة اليوم!');
+            }
+        }
+        
+        function gameComplete() {
+            clearInterval(timerInterval);
+            const playTime = (Date.now() - sessionStartTime) / 1000;
+            const timeBonus = Math.max(1000 - Math.floor(playTime), 100);
+            const moveBonus = Math.max(500 - moves * 10, 50);
+            const difficultyBonus = boardSize * 100;
+            
+            score = timeBonus + moveBonus + difficultyBonus;
+            updateStats();
+            
+            let message = `تهانينا! أكملت اللعبة!\nالنقاط: ${score}\nالحركات: ${moves}`;
+            
+            // Check if played for 3 minutes
+            if (playTime >= 180) {
+                message += '\n\nرائع! لعبت لأكثر من 3 دقائق. حصلت على نقطتين إضافيتين!';
+            }
+            
+            alert(message);
+        }
+        
+        function earnPoints() {
+            // Simulate ad watching
+            if (confirm('هل تريد مشاهدة إعلان لكسب 5 نقاط؟')) {
+                // In real implementation, this would trigger an actual ad
+                setTimeout(() => {
+                    alert('تهانينا! حصلت على 5 نقاط من مشاهدة الإعلان!');
+                    // Here you would send the points to the backend
+                }, 2000);
+            }
+        }
+        
+        function updateStats() {
+            document.getElementById('moves').textContent = moves;
+            document.getElementById('score').textContent = score;
+        }
+        
+        function updateTimer() {
+            const elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
+            const minutes = Math.floor(elapsed / 60);
+            const seconds = elapsed % 60;
+            document.getElementById('timer').textContent = 
+                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+        
+        // Initialize game on load
+        window.addEventListener('load', initGame);
+    </script>
+</body>
+</html>
+

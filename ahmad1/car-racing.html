@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سباق السيارات</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(to bottom, #87CEEB, #98FB98);
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            direction: rtl;
+        }
+        
+        .game-container {
+            text-align: center;
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        
+        #gameCanvas {
+            border: 3px solid #333;
+            border-radius: 10px;
+            background: #333;
+        }
+        
+        .controls {
+            margin: 15px 0;
+        }
+        
+        .btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            margin: 5px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .btn:hover {
+            background: #45a049;
+        }
+        
+        .btn.earn-points {
+            background: #FF6B35;
+        }
+        
+        .btn.earn-points:hover {
+            background: #E55A2B;
+        }
+        
+        .score {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            margin: 10px 0;
+        }
+        
+        .instructions {
+            margin: 15px 0;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>🏎️ سباق السيارات</h1>
+        <div class="score">النقاط: <span id="score">0</span></div>
+        <canvas id="gameCanvas" width="400" height="600"></canvas>
+        <div class="controls">
+            <button class="btn" onclick="startGame()">ابدأ اللعبة</button>
+            <button class="btn" onclick="pauseGame()">إيقاف مؤقت</button>
+            <button class="btn earn-points" onclick="earnPoints()">شاهد إعلان لكسب نقاط</button>
+        </div>
+        <div class="instructions">
+            استخدم الأسهم أو A/D للتحرك يميناً ويساراً<br>
+            تجنب السيارات الأخرى واجمع النقاط!
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let gameRunning = false;
+        let score = 0;
+        let gameSpeed = 2;
+        let playTime = 0;
+        let sessionStartTime = Date.now();
+        
+        // Player car
+        const player = {
+            x: canvas.width / 2 - 25,
+            y: canvas.height - 80,
+            width: 50,
+            height: 80,
+            speed: 5,
+            color: '#FF4444'
+        };
+        
+        // Enemy cars
+        let enemies = [];
+        let coins = [];
+        
+        // Game loop
+        function gameLoop() {
+            if (!gameRunning) return;
+            
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function update() {
+            playTime = (Date.now() - sessionStartTime) / 1000;
+            
+            // Move enemies
+            enemies.forEach((enemy, index) => {
+                enemy.y += gameSpeed;
+                if (enemy.y > canvas.height) {
+                    enemies.splice(index, 1);
+                    score += 10;
+                    updateScore();
+                }
+            });
+            
+            // Move coins
+            coins.forEach((coin, index) => {
+                coin.y += gameSpeed;
+                if (coin.y > canvas.height) {
+                    coins.splice(index, 1);
+                }
+            });
+            
+            // Spawn enemies
+            if (Math.random() < 0.02) {
+                enemies.push({
+                    x: Math.random() * (canvas.width - 50),
+                    y: -80,
+                    width: 50,
+                    height: 80,
+                    color: '#4444FF'
+                });
+            }
+            
+            // Spawn coins
+            if (Math.random() < 0.01) {
+                coins.push({
+                    x: Math.random() * (canvas.width - 20),
+                    y: -20,
+                    width: 20,
+                    height: 20
+                });
+            }
+            
+            // Check collisions
+            checkCollisions();
+            
+            // Increase speed over time
+            gameSpeed = 2 + Math.floor(score / 100) * 0.5;
+        }
+        
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = '#333';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw road lines
+            ctx.strokeStyle = '#FFF';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([20, 20]);
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 0);
+            ctx.lineTo(canvas.width / 2, canvas.height);
+            ctx.stroke();
+            
+            // Draw player
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            
+            // Draw enemies
+            enemies.forEach(enemy => {
+                ctx.fillStyle = enemy.color;
+                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+            });
+            
+            // Draw coins
+            coins.forEach(coin => {
+                ctx.fillStyle = '#FFD700';
+                ctx.beginPath();
+                ctx.arc(coin.x + 10, coin.y + 10, 10, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+        
+        function checkCollisions() {
+            // Check enemy collisions
+            enemies.forEach(enemy => {
+                if (player.x < enemy.x + enemy.width &&
+                    player.x + player.width > enemy.x &&
+                    player.y < enemy.y + enemy.height &&
+                    player.y + player.height > enemy.y) {
+                    gameOver();
+                }
+            });
+            
+            // Check coin collisions
+            coins.forEach((coin, index) => {
+                if (player.x < coin.x + coin.width &&
+                    player.x + player.width > coin.x &&
+                    player.y < coin.y + coin.height &&
+                    player.y + player.height > coin.y) {
+                    coins.splice(index, 1);
+                    score += 50;
+                    updateScore();
+                }
+            });
+        }
+        
+        function startGame() {
+            gameRunning = true;
+            score = 0;
+            enemies = [];
+            coins = [];
+            player.x = canvas.width / 2 - 25;
+            gameSpeed = 2;
+            sessionStartTime = Date.now();
+            updateScore();
+            gameLoop();
+            
+            // Award points for first play of the day
+            if (!localStorage.getItem('playedToday')) {
+                localStorage.setItem('playedToday', new Date().toDateString());
+                alert('تهانينا! حصلت على نقطة واحدة لأول لعبة اليوم!');
+            }
+        }
+        
+        function pauseGame() {
+            gameRunning = !gameRunning;
+            if (gameRunning) {
+                gameLoop();
+            }
+        }
+        
+        function gameOver() {
+            gameRunning = false;
+            
+            // Check if played for 3 minutes
+            if (playTime >= 180) {
+                alert('رائع! لعبت لأكثر من 3 دقائق. حصلت على نقطتين إضافيتين!');
+            }
+            
+            alert(`انتهت اللعبة! نقاطك النهائية: ${score}`);
+        }
+        
+        function earnPoints() {
+            // Simulate ad watching
+            if (confirm('هل تريد مشاهدة إعلان لكسب 5 نقاط؟')) {
+                // In real implementation, this would trigger an actual ad
+                setTimeout(() => {
+                    alert('تهانينا! حصلت على 5 نقاط من مشاهدة الإعلان!');
+                    // Here you would send the points to the backend
+                }, 2000);
+            }
+        }
+        
+        function updateScore() {
+            document.getElementById('score').textContent = score;
+        }
+        
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            if (!gameRunning) return;
+            
+            switch(e.key) {
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    if (player.x > 0) player.x -= player.speed;
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    if (player.x < canvas.width - player.width) player.x += player.speed;
+                    break;
+            }
+        });
+        
+        // Touch controls for mobile
+        let touchStartX = 0;
+        canvas.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+        });
+        
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (!gameRunning) return;
+            
+            const touchX = e.touches[0].clientX;
+            const deltaX = touchX - touchStartX;
+            
+            if (deltaX > 10 && player.x < canvas.width - player.width) {
+                player.x += player.speed;
+            } else if (deltaX < -10 && player.x > 0) {
+                player.x -= player.speed;
+            }
+            
+            touchStartX = touchX;
+        });
+    </script>
+</body>
+</html>
+
